@@ -219,6 +219,7 @@ class ApplicantPool(object):
             subgrouped *= 100. / len(cdf)
         unstacked = subgrouped.unstack()[groups]
         unstacked.plot.bar(rot=30)
+        plt.legend(labels=[g for g in gb.groups])
         self._plot("Applicants who got their nth preference",
             "%" if percentify_plot else "Count",
             "Satisfied applicants (by category)", percentify=percentify_plot)
@@ -231,8 +232,6 @@ class ApplicantPool(object):
         stats.kruskal(a,b,c)
         """
         cdf = self.placed(category=cat, use_filter=use_filter)
-        if cat is not None:
-            cdf = cdf[cdf["category"] == cat]
         gb = cdf.groupby(["strategy"])
         to_compare = [gb.get_group(g)["preference_number"] for g in gb.groups]
         # needs to be graphed for a good visual comparison
@@ -241,10 +240,12 @@ class ApplicantPool(object):
             subgrouped *= 100. / len(cdf)
         unstacked = subgrouped.unstack()
         unstacked.plot.bar(rot=30)
+        plt.legend(labels=[g for g in gb.groups])
         self._plot("Applicants who got their nth preference",
             "%" if percentify_plot else "Count",
-            "Satisfied applicants (by category)", percentify=percentify_plot)
+            "Satisfied applicants (by strategy)", percentify=percentify_plot)
         # each strategy gets their own bar
+        # TODO: fix this, doesn't work as intended
         return stats.kruskal(*to_compare)
 
     def compare_two_firsts(self, groups, use_filter=None, cat=None):
@@ -259,6 +260,7 @@ class ApplicantPool(object):
         to_compare = [(gb.get_group(g)["preference_number"] == 0).value_counts() for g in groups]
         contingency_table = np.array(to_compare)[:, ::-1].T
         print(contingency_table)
+        # TODO: make contingency table into pd.df for prettier printing
         return stats.chi2_contingency(contingency_table)
 
     def compare_all_firsts(self, use_filter=None, cat=None):
