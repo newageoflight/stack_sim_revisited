@@ -126,7 +126,7 @@ class AnnealSimulation(Simulation):
     """
     Runs simulated annealing simulation
     """
-    def __init__(self, starting_strategies: "list[tuple[str, float]]", rounds=1, temp=10000, cool_rate=0.0002, iterlimit=1000000) -> None:
+    def __init__(self, starting_strategies: "list[tuple[str, float]]", rounds=1, temp=10000, cool_rate=0.001, iterlimit=1000000) -> None:
         # TODO: consider making these run parameters rather than sim parameters
         self.min_unhappiness = POSITIVE_INFINITY
         self.best_state = np.array([])

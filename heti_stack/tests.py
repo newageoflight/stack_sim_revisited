@@ -1,6 +1,6 @@
 from .sim import AnnealSimulation, CategoricalSimulation
 
-def create_and_run_sim(starting_strategies: "list[tuple[str, float]]", mode="anneal", **kwargs):
+def create_and_run_sim(starting_strategies: "list[tuple[str, float]]", mode="anneal", percentify=True, **kwargs):
     """
     Create and run a simulation. Plus, generate plots and statistics afterwards.
 
@@ -19,10 +19,12 @@ def create_and_run_sim(starting_strategies: "list[tuple[str, float]]", mode="ann
         sim.plot_convergence()
 
     cpool = sim.applicant_pool
-    cpool.plot_all_separated()
-    cpool.plot_all_unseparated()
-    cpool.plot_every_category()
+    cpool.plot_all_separated(percentify=percentify)
+    cpool.plot_all_unseparated(percentify=percentify)
+    cpool.plot_every_category(percentify=percentify)
 
     if len(starting_strategies) > 1:
-        cpool.compare_all_subgroups()
-        cpool.compare_all_firsts()
+        kruskal_stat, kruskal_p = cpool.compare_all_subgroups()
+        print("Kruskal test statistic: {stat}\np value: {pval}".format(stat=kruskal_stat, pval=kruskal_p))
+        chi2_stat, chi2_p, chi2_dof, _ = cpool.compare_all_firsts()
+        print("Chi-squared test statistic: {stat} (with {dof} dof)\np value: {pval}".format(stat=chi2_stat, dof=chi2_dof, pval=chi2_p))

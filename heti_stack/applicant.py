@@ -149,7 +149,7 @@ class ApplicantPool(object):
         return self.candidate_df.set_index("strategy", append=True).reorder_levels([1,0]).sort_index()
 
     def plot_all_unseparated(self, use_filter=None, percentify=False):
-        cdf = self.placed()
+        cdf = self.placed(use_filter=use_filter)
         allgrouped = cdf.groupby(["preference_number"]).count()["uid"]
         if percentify:
             allgrouped *= 100. / len(cdf)
@@ -159,7 +159,7 @@ class ApplicantPool(object):
             "Satisfied applicants (all)", percentify=percentify)
 
     def plot_all_separated(self, use_filter=None, percentify=False):
-        cdf = self.placed()
+        cdf = self.placed(use_filter=use_filter)
         subgrouped = cdf.groupby(["preference_number", "category"]).count()["uid"]
         if percentify:
             subgrouped *= 100. / len(cdf)
@@ -171,7 +171,7 @@ class ApplicantPool(object):
             "Satisfied applicants (by category)", percentify=percentify)
     
     def plot_single_category(self, cat, use_filter=None, percentify=False):
-        cat_df = self.placed(category=cat)
+        cat_df = self.placed(category=cat, use_filter=use_filter)
         catgroup = cat_df.groupby(["preference_number"]).count()["uid"]
         if percentify:
             catgroup *= 100. / len(cat_df)
@@ -181,7 +181,7 @@ class ApplicantPool(object):
             "Satisfied category {cat} applicants".format(cat=cat+1), percentify=percentify)
     
     def plot_every_category(self, use_filter=None, percentify=False):
-        for cat in range(len(category_counts)):
+        for cat in self.placed(use_filter=use_filter)["category"].unique():
             self.plot_single_category(cat, use_filter, percentify)
 
     @staticmethod
@@ -214,18 +214,15 @@ class ApplicantPool(object):
         gb = cdf.groupby(["strategy"])
         to_compare = [gb.get_group(g)["preference_number"] for g in groups]
         # needs to be graphed for a good visual comparison
-        for g in groups:
-            subgroup = gb.get_group(g)
-            toplot = subgroup.groupby(["preference_number"]).count()["uid"]
-            if percentify_plot:
-                toplot *= 100. / len(cdf)
-            toplot.plot.bar(rot=30)
-            plt.xticks(np.arange(15), [ordinal(n+1) for n in range(15)])
-            if percentify_plot:
-                plt.yticks(np.arange(0, 101, 10))
-            self._plot("Applicants who got their nth preference",
-                "%" if percentify_plot else "Count",
-                "Satisfied applicants (by category)")
+        subgrouped = cdf.groupby(["strategy", "category"]).count()["uid"]
+        if percentify_plot:
+            subgrouped *= 100. / len(cdf)
+        unstacked = subgrouped.unstack()[groups]
+        unstacked.plot.bar(rot=30)
+        self._plot("Applicants who got their nth preference",
+            "%" if percentify_plot else "Count",
+            "Satisfied applicants (by category)", percentify=percentify_plot)
+        # make it so that each strategy gets their own bar
         return stats.mannwhitneyu(*to_compare)
     
     def compare_all_subgroups(self, use_filter=None, cat=None, percentify_plot=False):
@@ -239,18 +236,15 @@ class ApplicantPool(object):
         gb = cdf.groupby(["strategy"])
         to_compare = [gb.get_group(g)["preference_number"] for g in gb.groups]
         # needs to be graphed for a good visual comparison
-        for g in gb.groups:
-            subgroup = gb.get_group(g)
-            toplot = subgroup.groupby(["preference_number"]).count()["uid"]
-            if percentify_plot:
-                toplot *= 100. / len(cdf)
-            toplot.plot.bar(rot=30)
-            plt.xticks(np.arange(15), [ordinal(n+1) for n in range(15)])
-            if percentify_plot:
-                plt.yticks(np.arange(0, 101, 10))
-            self._plot("Applicants who got their nth preference",
-                "%" if percentify_plot else "Count",
-                "Satisfied applicants (by category)")
+        subgrouped = cdf.groupby(["strategy", "category"]).count()["uid"]
+        if percentify_plot:
+            subgrouped *= 100. / len(cdf)
+        unstacked = subgrouped.unstack()
+        unstacked.plot.bar(rot=30)
+        self._plot("Applicants who got their nth preference",
+            "%" if percentify_plot else "Count",
+            "Satisfied applicants (by category)", percentify=percentify_plot)
+        # each strategy gets their own bar
         return stats.kruskal(*to_compare)
 
     def compare_two_firsts(self, groups, use_filter=None, cat=None):
