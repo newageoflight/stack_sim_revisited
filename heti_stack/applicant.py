@@ -1,3 +1,6 @@
+from functools import reduce
+from operator import itemgetter
+
 from IPython.display import display, HTML
 from scipy import stats
 from textwrap import wrap
@@ -5,7 +8,7 @@ from uuid import uuid4
 
 from .base import category_counts
 from .hospital import stack
-from .utils import ordinal
+from .utils import is_iterable, ordinal
 from .strategies import Hospitals
 
 import matplotlib.pyplot as plt
@@ -215,12 +218,14 @@ class ApplicantPool(object):
         # TODO: implement compound groups i.e. merge two groups together and treat them as one to compare
         cdf = self.placed(category=cat, use_filter=use_filter, exclude_dra=exclude_dra)
         gb = cdf.groupby(["strategy"])
-        to_compare = [gb.get_group(g)["preference_number"] for g in groups]
+        new_df = self.make_groups(cdf, gb, groups)
+        new_gb = new_df.groupby(["group"])
+        to_compare = [new_gb.get_group(g)["preference_number"] for g in new_gb.groups]
         # needs to be graphed for a good visual comparison
-        subgrouped = cdf.groupby(["preference_number", "strategy"]).count()["uid"]
+        subgrouped = new_df.groupby(["preference_number", "group"]).count()["uid"]
         if percentify_plot:
             subgrouped *= 100. / len(cdf)
-        unstacked = subgrouped.unstack()[groups]
+        unstacked = subgrouped.unstack()
         unstacked.plot.bar(rot=30)
         self._plot("Applicants who got their nth preference",
             "%" if percentify_plot else "Count",
@@ -255,9 +260,13 @@ class ApplicantPool(object):
         # TODO: implement compound groups i.e. merge two groups together and treat them as one to compare
         cdf = self.placed(category=cat, use_filter=use_filter, exclude_dra=exclude_dra)
         gb = cdf.groupby(["strategy"])
-        to_compare = [(gb.get_group(g)["preference_number"] == 0).value_counts() for g in groups]
+        new_df = self.make_groups(cdf, gb, groups)
+        new_gb = new_df.groupby(["group"])
+        to_compare = [(new_gb.get_group(g)["preference_number"] == 0).value_counts() for g in new_gb.groups]
+        # needs to be graphed for a good visual comparison
+        # to_compare = [(gb.get_group(g)["preference_number"] == 0).value_counts() for g in groups]
         contingency_table = np.array(to_compare)[:, ::-1].T
-        contingency_df = pd.DataFrame(contingency_table, columns=groups, index=["Got first preference", "Did not get first preference"])
+        contingency_df = pd.DataFrame(contingency_table, columns=[g for g in new_gb.groups], index=["Got first preference", "Did not get first preference"])
         if percentify:
             contingency_df_percents = contingency_df/contingency_df.sum()
             display(contingency_df_percents.style.format("{:.2%}"))
@@ -281,3 +290,20 @@ class ApplicantPool(object):
         else:
             display(contingency_df)
         return stats.chi2_contingency(contingency_table)
+
+    @staticmethod
+    def make_groups(df, gb, groups):
+        """
+        Similar to pd.get_group but allows using lists to combine several groups
+        """
+        # first convert all groups to lists for safety
+        groups_list = [[i] if type(i) != list else i for i in groups]
+        df["group"] = ""
+        for g in groups_list:
+            group_name = "+".join(g)
+            index = itemgetter(*g)(gb.groups)
+            # either a tuple of indices or a single index
+            if type(index) == tuple:
+                index = reduce(lambda a, b: a.union(b), index)
+            df.loc[index, "group"] = group_name
+        return df

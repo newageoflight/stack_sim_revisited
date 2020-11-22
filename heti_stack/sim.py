@@ -89,7 +89,7 @@ class Simulation(ABC):
 
     def _detranslate(self) -> None:
         """
-        Detranslate/announce the allocation results back to the applicant pool
+        Detranslate/announce the final allocation results back to the applicant pool
         """
         # First detranslate the allocations to the candidate df
         allocation_col = np.argmax(self.allocation_matrix == 1, axis=1)

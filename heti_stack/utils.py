@@ -17,3 +17,11 @@ def underscorify(name):
 
 POSITIVE_INFINITY = 1e8
 NEGATIVE_INFINITY = -POSITIVE_INFINITY
+
+def is_iterable(item):
+	try:
+		iterable = iter(item)
+		if iterable:
+			return True
+	except TypeError as te:
+		return False
