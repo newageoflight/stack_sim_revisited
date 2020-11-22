@@ -30,30 +30,33 @@ def generate_sim_stats(sim, mode="anneal", percentify=True):
     if mode == "anneal":
         sim.plot_convergence()
 
+    dra_toggle = [False, True]
     cfilters = [None, "wanted top 4 hospital", "got top 4 hospital", "wanted top 6 hospital", "got top 6 hospital"]
     cpool = sim.applicant_pool
 
-    for f in cfilters:
-        display(HTML("<h5>Filter: {0}</h5>".format(f)))
-        cpool.plot_all_separated(use_filter=f, percentify=percentify)
-        cpool.plot_all_unseparated(use_filter=f, percentify=percentify)
-        cpool.plot_every_category(use_filter=f, percentify=percentify)
+    for d in dra_toggle:
+        display(HTML("<h5>DRA {0}excluded</h5>".format("not " if not d else "")))
+        for f in cfilters:
+            display(HTML("<h5>Filter: {0}</h5>".format(f)))
+            cpool.plot_all_separated(use_filter=f, percentify=percentify, exclude_dra=d)
+            cpool.plot_all_unseparated(use_filter=f, percentify=percentify, exclude_dra=d)
+            cpool.plot_every_category(use_filter=f, percentify=percentify, exclude_dra=d)
 
-        if len(sim.starting_strategies) > 1:
-            display(HTML("<p>Kruskal test comparing overall happiness between strategy subgroups</p>"))
-            kruskal_stat, kruskal_p = cpool.compare_all_subgroups(use_filter=f, percentify_plot=percentify)
-            display(HTML("""
-            <ul>
-                <li>Kruskal test statistic: {stat}</li>
-                <li><em>p</em> value: {pval}</li>
-            </ul>""".format(stat=kruskal_stat, pval=kruskal_p if kruskal_p > 0.05 else "<strong>{0}</strong>".format(kruskal_p))))
-            display(HTML("<p>Chi-squared test comparing first preferences obtained in strategy subgroups</p>"))
-            chi2_stat, chi2_p, chi2_dof, _ = cpool.compare_all_firsts(use_filter=f, percentify=percentify)
-            display(HTML("""
-            <ul>
-                <li>Chi-squared test statistic: {stat} (with {dof} dof)</li>
-                <li><em>p</em> value: {pval}</li>
-            </ul>""".format(stat=chi2_stat, dof=chi2_dof, pval=chi2_p if chi2_p > 0.05 else "<strong>{0}</strong>".format(chi2_p))))
+            if len(sim.starting_strategies) > 1:
+                display(HTML("<p>Kruskal test comparing overall happiness between strategy subgroups</p>"))
+                kruskal_stat, kruskal_p = cpool.compare_all_subgroups(use_filter=f, percentify_plot=percentify, exclude_dra=d)
+                display(HTML("""
+                <ul>
+                    <li>Kruskal test statistic: {stat}</li>
+                    <li><em>p</em> value: {pval}</li>
+                </ul>""".format(stat=kruskal_stat, pval=kruskal_p if kruskal_p > 0.05 else "<strong>{0}</strong>".format(kruskal_p))))
+                display(HTML("<p>Chi-squared test comparing first preferences obtained in strategy subgroups</p>"))
+                chi2_stat, chi2_p, chi2_dof, _ = cpool.compare_all_firsts(use_filter=f, percentify=percentify, exclude_dra=d)
+                display(HTML("""
+                <ul>
+                    <li>Chi-squared test statistic: {stat} (with {dof} dof)</li>
+                    <li><em>p</em> value: {pval}</li>
+                </ul>""".format(stat=chi2_stat, dof=chi2_dof, pval=chi2_p if chi2_p > 0.05 else "<strong>{0}</strong>".format(chi2_p))))
 
 def make_single_strategy_simulation(strategy: str, mode="anneal", percentify=True, **kwargs):
     starting_strategies = [(strategy, 1.0)]

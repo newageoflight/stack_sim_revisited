@@ -119,23 +119,26 @@ class ApplicantPool(object):
         else:
             raise NotImplementedError("This filter hasn't been implemented yet!")
 
-    def satisfied(self, rank, category=None, use_filter=None):
+    def satisfied(self, rank, category=None, use_filter=None, exclude_dra=False):
         to_ret = self.candidate_df[(self.candidate_df["preference_number"] == rank) &
-            (self.candidate_df["category"] == category if category != None else True)]
+            (self.candidate_df["category"] == category if category != None else True) &
+            (~self.candidate_df["is_dra"] if exclude_dra else True)]
         if use_filter:
             to_ret = self._candidate_filter(to_ret, use_filter)
         return to_ret
 
-    def placed(self, category=None, use_filter=None):
+    def placed(self, category=None, use_filter=None, exclude_dra=False):
         to_ret = self.candidate_df[(self.candidate_df["allocation"] != -1) &
-            (self.candidate_df["category"] == category if category != None else True)]
+            (self.candidate_df["category"] == category if category != None else True) &
+            (~self.candidate_df["is_dra"] if exclude_dra else True)]
         if use_filter:
             to_ret = self._candidate_filter(to_ret, use_filter)
         return to_ret
 
-    def unplaced(self, category=None, use_filter=None):
+    def unplaced(self, category=None, use_filter=None, exclude_dra=False):
         to_ret = self.candidate_df[(self.candidate_df["allocation"] == -1) &
-            (self.candidate_df["category"] == category if category != None else True)]
+            (self.candidate_df["category"] == category if category != None else True) &
+            (~self.candidate_df["is_dra"] if exclude_dra else True)]
         if use_filter:
             to_ret = self._candidate_filter(to_ret, use_filter)
         return to_ret
@@ -149,8 +152,8 @@ class ApplicantPool(object):
     def stratify_applicants_by_strategy(self):
         return self.candidate_df.set_index("strategy", append=True).reorder_levels([1,0]).sort_index()
 
-    def plot_all_unseparated(self, use_filter=None, percentify=False):
-        cdf = self.placed(use_filter=use_filter)
+    def plot_all_unseparated(self, use_filter=None, percentify=False, exclude_dra=False):
+        cdf = self.placed(use_filter=use_filter, exclude_dra=exclude_dra)
         allgrouped = cdf.groupby(["preference_number"]).count()["uid"]
         if percentify:
             allgrouped *= 100. / len(cdf)
@@ -159,8 +162,8 @@ class ApplicantPool(object):
             "%" if percentify else "Count",
             "Satisfied applicants (all)", percentify=percentify)
 
-    def plot_all_separated(self, use_filter=None, percentify=False):
-        cdf = self.placed(use_filter=use_filter)
+    def plot_all_separated(self, use_filter=None, percentify=False, exclude_dra=False):
+        cdf = self.placed(use_filter=use_filter, exclude_dra=exclude_dra)
         subgrouped = cdf.groupby(["preference_number", "category"]).count()["uid"]
         if percentify:
             subgrouped *= 100. / len(cdf)
@@ -171,8 +174,8 @@ class ApplicantPool(object):
             "%" if percentify else "Count",
             "Satisfied applicants (by category)", percentify=percentify)
     
-    def plot_single_category(self, cat, use_filter=None, percentify=False):
-        cat_df = self.placed(category=cat, use_filter=use_filter)
+    def plot_single_category(self, cat, use_filter=None, percentify=False, exclude_dra=False):
+        cat_df = self.placed(category=cat, use_filter=use_filter, exclude_dra=exclude_dra)
         catgroup = cat_df.groupby(["preference_number"]).count()["uid"]
         if percentify:
             catgroup *= 100. / len(cat_df)
@@ -181,9 +184,9 @@ class ApplicantPool(object):
             "%" if percentify else "Count",
             "Satisfied category {cat} applicants".format(cat=cat+1), percentify=percentify)
     
-    def plot_every_category(self, use_filter=None, percentify=False):
+    def plot_every_category(self, use_filter=None, percentify=False, exclude_dra=False):
         for cat in self.placed(use_filter=use_filter)["category"].unique():
-            self.plot_single_category(cat, use_filter, percentify)
+            self.plot_single_category(cat, use_filter, percentify, exclude_dra)
 
     @staticmethod
     def _plot(xlab, ylab, title, filename="", percentify=False):
@@ -201,7 +204,7 @@ class ApplicantPool(object):
         # plt.cla()
         # plt.close('all')
 
-    def compare_two_subgroups(self, groups, use_filter=None, cat=None, percentify_plot=False):
+    def compare_two_subgroups(self, groups, use_filter=None, cat=None, percentify_plot=False, exclude_dra=False):
         """
         Run Mann-Whitney U test between two specified strategy subgroups
         Also allows for filters and composite subgroups i.e. adding >1 subgroup into one
@@ -209,9 +212,8 @@ class ApplicantPool(object):
         Both cols should be passed as lists
         stats.mannwhitneyu(a,b)
         """
-        cdf = self.placed(category=cat, use_filter=use_filter)
-        if cat is not None:
-            cdf = cdf[cdf["category"] == cat]
+        # TODO: implement compound groups i.e. merge two groups together and treat them as one to compare
+        cdf = self.placed(category=cat, use_filter=use_filter, exclude_dra=exclude_dra)
         gb = cdf.groupby(["strategy"])
         to_compare = [gb.get_group(g)["preference_number"] for g in groups]
         # needs to be graphed for a good visual comparison
@@ -226,12 +228,12 @@ class ApplicantPool(object):
         # make it so that each strategy gets their own bar
         return stats.mannwhitneyu(*to_compare)
     
-    def compare_all_subgroups(self, use_filter=None, cat=None, percentify_plot=False):
+    def compare_all_subgroups(self, use_filter=None, cat=None, percentify_plot=False, exclude_dra=False):
         """
         Runs Kruskal-Wallis H test between all strategy subgroups
         stats.kruskal(a,b,c)
         """
-        cdf = self.placed(category=cat, use_filter=use_filter)
+        cdf = self.placed(category=cat, use_filter=use_filter, exclude_dra=exclude_dra)
         gb = cdf.groupby(["strategy"])
         to_compare = [gb.get_group(g)["preference_number"] for g in gb.groups]
         # needs to be graphed for a good visual comparison
@@ -243,18 +245,15 @@ class ApplicantPool(object):
         self._plot("Applicants who got their nth preference",
             "%" if percentify_plot else "Count",
             "Satisfied applicants (by strategy)", percentify=percentify_plot)
-        # each strategy gets their own bar
-        # TODO: fix this, doesn't work as intended
         return stats.kruskal(*to_compare)
 
-    def compare_two_firsts(self, groups, use_filter=None, cat=None, percentify=False):
+    def compare_two_firsts(self, groups, use_filter=None, cat=None, percentify=False, exclude_dra=False):
         """
         Runs chi-squared test between number of first preferences obtained in two specified strategy subgroups
         stats.chi2_contingency(chi2_table)
         """
-        cdf = self.placed(category=cat, use_filter=use_filter)
-        if cat is not None:
-            cdf = cdf[cdf["category"] == cat]
+        # TODO: implement compound groups i.e. merge two groups together and treat them as one to compare
+        cdf = self.placed(category=cat, use_filter=use_filter, exclude_dra=exclude_dra)
         gb = cdf.groupby(["strategy"])
         to_compare = [(gb.get_group(g)["preference_number"] == 0).value_counts() for g in groups]
         contingency_table = np.array(to_compare)[:, ::-1].T
@@ -266,14 +265,12 @@ class ApplicantPool(object):
             display(contingency_df)
         return stats.chi2_contingency(contingency_table)
 
-    def compare_all_firsts(self, use_filter=None, cat=None, percentify=False):
+    def compare_all_firsts(self, use_filter=None, cat=None, percentify=False, exclude_dra=False):
         """
         Runs chi-squared test between number of first preferences obtained in all strategy subgroups
         stats.chi2_contingency(chi2_table)
         """
-        cdf = self.placed(category=cat, use_filter=use_filter)
-        if cat is not None:
-            cdf = cdf[cdf["category"] == cat]
+        cdf = self.placed(category=cat, use_filter=use_filter, exclude_dra=exclude_dra)
         gb = cdf.groupby(["strategy"])
         to_compare = [(gb.get_group(g)["preference_number"] == 0).value_counts() for g in gb.groups]
         contingency_table = np.array(to_compare)[:, ::-1].T

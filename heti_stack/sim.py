@@ -50,21 +50,22 @@ class Simulation(ABC):
         cat1_subdf = self.applicant_pool.candidate_df[self.applicant_pool.candidate_df["category"] == 0]
         cat1_indices = cat1_subdf.index
         dra_indices = np.where(self.hospitals.dra_capacities > 0)[0]
-        print(dra_indices, self.hospitals.dra_capacities[dra_indices])
         dra_prefs = self.preferences_matrix[np.ix_(cat1_indices, dra_indices)]
-        print(dra_prefs, dra_prefs[0])
         dra_firsts = dra_prefs == 0
         dra_firsts = dra_firsts.astype("int32")
-        print(dra_firsts)
         # allocate them to that hospital, capacity allowing
         # loop through each dra hospital
-        # sample however many will fit the dra capacity
-        # or if there are fewer preferences than spots available, take everyone who preferenced it
-        # choice(preferenced_candidates, min(number_of_preferences, capacity), replace=False)
+        for i in range(len(dra_indices)):
+            preferenced_this_first = np.where(dra_firsts[:, i] == 1)[0]
+            # sample however many will fit the dra capacity
+            # or if there are fewer preferences than spots available, take everyone who preferenced it
+            to_alloc = np.random.choice(preferenced_this_first,
+                min(self.hospitals.dra_capacities[dra_indices[i]], len(preferenced_this_first)),
+                replace=False)
+            to_alloc = np.sort(to_alloc)
+            self.allocation_matrix[to_alloc, dra_indices[i]] = 1
         # update the spots remaining count
         self._hospital_spots = self._hospital_capacities - self.allocation_matrix.sum(axis=0)
-        if np.any(self._hospital_spots < 0):
-            raise ValueError("DRA has caused the hospitals to be overfilled!\n{0}".format(self._hospital_spots))
         # detranslate with the flag is_dra positive for applicants
         self._dra_detranslate()
 
@@ -78,8 +79,9 @@ class Simulation(ABC):
         Detranslate/announce DRA preallocation results back to the applicant pool
         """
         allocation_col = np.argmax(self.allocation_matrix == 1, axis=1)
+        got_allocated = np.any(self.allocation_matrix == 1, axis=1)
         self.applicant_pool.candidate_df["allocation"] = allocation_col
-        self.applicant_pool.candidate_df["is_dra"] = np.any(self.allocation_matrix == 1, axis=1)
+        self.applicant_pool.candidate_df["is_dra"] = got_allocated
         # no need to calculate preference values as they're all 0 (first)
         self.hospitals.hospital_df["spots_remaining"] = self._hospital_spots
         cdf = self.applicant_pool.candidate_df
