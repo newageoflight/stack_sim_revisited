@@ -6,7 +6,7 @@ Allocation process simulation objects
 
 from abc import ABC, abstractmethod
 
-from .anneal_utils import one_array, swap_two, accept
+from .sim_utils import cool_numba, one_array, swap_two, accept
 from .applicant import ApplicantPool, hospital_generator
 from .base import category_counts
 from .strategies import Hospitals
@@ -101,7 +101,6 @@ class CategoricalSimulation(Simulation):
                     # how many people preferenced this hospital at this rank?
                     cat_ranks = (cat_prefs == rank).astype("int32")
                     # now iterate through each hospital to check if it exceeds capacity or not
-                    # print(col_num)
                     # sum the column - is it greater than the capacity?
                     ranked_this_hospital = cat_ranks[:, col_num]
                     ranked_this_indices = np.where(ranked_this_hospital == 1)[0]
@@ -126,7 +125,7 @@ class AnnealSimulation(Simulation):
     """
     Runs simulated annealing simulation
     """
-    def __init__(self, starting_strategies: "list[tuple[str, float]]", rounds=1, temp=10000, cool_rate=0.001, iterlimit=1000000) -> None:
+    def __init__(self, starting_strategies: "list[tuple[str, float]]", rounds=1, temp=10000.0, cool_rate=0.001, iterlimit=1000000, backend="cpu") -> None:
         # TODO: consider making these run parameters rather than sim parameters
         self.min_unhappiness = POSITIVE_INFINITY
         self.best_state = np.array([])
@@ -134,7 +133,8 @@ class AnnealSimulation(Simulation):
         self._cooling_rate = cool_rate
         self._iterlimit = iterlimit
         self.unhappiness_df = pd.DataFrame(columns=["current_unhappiness", "min_unhappiness"])
-        self.unhappiness_array = np.empty((0,2),dtype=int)
+        self.unhappiness_array = np.empty((0,2),dtype=np.int32)
+        self._backend = backend
         super().__init__(starting_strategies, rounds)
 
     def _setup_initial_state(self) -> None:
@@ -172,6 +172,7 @@ class AnnealSimulation(Simulation):
 
     def run(self, dra_prefill=False) -> None:
         super().run(dra_prefill)
+        backend = self._backend
         # setup initial state
         self._setup_initial_state()
         # run sim
@@ -180,29 +181,49 @@ class AnnealSimulation(Simulation):
         placed_candidates_bool = np.any(self.allocation_matrix == 1, axis=1)
         placed_candidates = self.allocation_matrix[placed_candidates_bool]
         relevant_preferences = self.preferences_matrix[placed_candidates_bool]
+        # add initial unhappiness stats to the array
+        u_current = np.sum(placed_candidates * relevant_preferences)
+        self.unhappiness_array = np.append(self.unhappiness_array, np.array([[u_current, u_current]], np.int32), axis=0)
+        unhappiness_log = np.empty((0,2), np.int32)
         # print(placed_candidates, relevant_preferences)
-        # move to gpu with cupy
-        current_state = cp.asarray(placed_candidates)
-        pref_arr = cp.asarray(relevant_preferences)
-        capacity_arr = cp.asarray(self._hospital_capacities)
-        best_state = cp.asarray(self.best_state)
-        while self._temp >= 1e-8 and itercount < self._iterlimit:
-            next_state = swap_two(current_state)
-            u_current = cp.sum(pref_arr * current_state)
-            u_next = cp.sum(pref_arr * next_state)
-            next_over_capacity = (cp.sum(next_state, axis=0) > capacity_arr).any()
-            if accept(u_current, u_next, self._temp) >= cp.random.random() and not next_over_capacity:
-                current_state = next_state
-                u_current = u_next
-            if u_current < self.min_unhappiness:
-                best_state = current_state
-                self.min_unhappiness = u_current
-            self._temp *= 1 - self._cooling_rate
-            itercount += 1
-            self.unhappiness_array = np.append(self.unhappiness_array, np.array([[u_current, self.min_unhappiness]], np.int32), axis=0)
+        if backend == "gpu":
+            # move to gpu with cupy
+            # try to do all operations on the gpu to avoid copying overhead
+            current_state = cp.asarray(placed_candidates)
+            pref_arr = cp.asarray(relevant_preferences)
+            capacity_arr = cp.asarray(self._hospital_capacities)
+            best_state = cp.asarray(self.best_state)
+            unhappiness_log = cp.asarray(unhappiness_log)
+            T = cp.asarray(self._temp)
+            cool_rate = cp.asarray(self._cooling_rate)
+            min_unhappiness = cp.asarray(self.min_unhappiness)
+            while T >= 1e-8 and itercount < self._iterlimit:
+                next_state = swap_two(current_state)
+                u_current = cp.sum(pref_arr * current_state)
+                u_next = cp.sum(pref_arr * next_state)
+                accepted = accept(u_current, u_next, T) >= cp.random.random()
+                next_over_capacity = (cp.sum(next_state, axis=0) > capacity_arr).any()
+                if accepted and not next_over_capacity:
+                    current_state = next_state
+                    u_current = u_next
+                if u_current < min_unhappiness:
+                    best_state = current_state
+                    min_unhappiness = u_current
+                T *= 1 - cool_rate
+                itercount += 1
+                # the proper method would be concatenate but vstack works (and concat doesn't) so i'll just use that
+                unhappiness_log = cp.vstack([unhappiness_log, cp.array([u_current, min_unhappiness], cp.int32)])
 
-        # move the end results back to cpu memory via cp.asnumpy
-        self.best_state = cp.asnumpy(best_state)
+            # move the end results back to cpu memory via cp.asnumpy
+            self.best_state = cp.asnumpy(best_state)
+            unhappiness_log = cp.asnumpy(unhappiness_log)
+        elif backend == "cpu":
+            # if we can't use the GPU, use numba.jit
+            self._temp, self.min_unhappiness, current_state, self.best_state, unhappiness_log = cool_numba(
+                placed_candidates, relevant_preferences, self._hospital_capacities,
+                self._temp, self._cooling_rate, self._iterlimit
+            )
+        self.unhappiness_array = np.append(self.unhappiness_array, unhappiness_log, axis=0)
         self.allocation_matrix[placed_candidates_bool] = self.best_state
         self._detranslate()
 

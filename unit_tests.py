@@ -4,7 +4,7 @@ from heti_stack.sim import CategoricalSimulation
 import numpy as np
 
 test_cat_sim = CategoricalSimulation([
-    ("stack", 0.50),
+    ("stack with random top", 0.50),
     ("random", 0.50)
 ])
 
@@ -24,13 +24,24 @@ from heti_stack.sim import AnnealSimulation
 
 import numpy as np
 
-test_anneal_sim = AnnealSimulation([
+test_anneal_gpu_sim = AnnealSimulation([
     ("stack", 0.50),
     ("random", 0.50)
-], cool_rate=0.003)
+], backend="gpu")
 
-%time test_anneal_sim.run()
+test_anneal_cpu_sim = AnnealSimulation([
+    ("stack", 0.50),
+    ("random", 0.50)
+], backend="cpu")
 
-test_anneal_sim.plot_convergence()
-print("If the graph looks correct, then the anneal sim works properly")
+print("testing gpu\n---")
+%time test_anneal_gpu_sim.run()
+print("\n\n")
+print("testing cpu\n---")
+%time test_anneal_cpu_sim.run()
+print("\n\n")
+
+test_anneal_gpu_sim.plot_convergence()
+test_anneal_cpu_sim.plot_convergence()
+print("If the graphs look correct, then the anneal sim works properly")
 #%%
