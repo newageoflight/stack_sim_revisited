@@ -1,3 +1,4 @@
+from IPython.display import display, HTML
 from scipy import stats
 from textwrap import wrap
 from uuid import uuid4
@@ -105,14 +106,14 @@ class ApplicantPool(object):
         Replaces the original filtration functions like got top 6, top 4, etc.
         """
         q = query.lower().strip()
-        wanted_re = re.compile(r"wanted (a )?top (\d+) hospital")
-        got_re = re.compile(r"got (a )?top (\d+) hospital")
+        wanted_re = re.compile(r"wanted (?:a )?top (\d+) hospital")
+        got_re = re.compile(r"got (?:a )?top (\d+) hospital")
         if wanted_re.match(q):
             matched = wanted_re.match(q)
             top_cap = int(matched.group(1))
             return df[df.first_preference.isin(stack[:top_cap])]
         elif got_re.match(q):
-            matched = wanted_re.match(q)
+            matched = got_re.match(q)
             top_cap = int(matched.group(1))
             return df[df.allocation.isin(stack[:top_cap])]
         else:
@@ -165,7 +166,7 @@ class ApplicantPool(object):
             subgrouped *= 100. / len(cdf)
         unstacked = subgrouped.unstack()
         unstacked.plot.bar(rot=30)
-        plt.legend(labels=[i+1 for i in range(len(unstacked.columns))])
+        plt.legend(labels=unstacked.columns + 1)
         self._plot("Applicants who got their nth preference",
             "%" if percentify else "Count",
             "Satisfied applicants (by category)", percentify=percentify)
@@ -214,12 +215,11 @@ class ApplicantPool(object):
         gb = cdf.groupby(["strategy"])
         to_compare = [gb.get_group(g)["preference_number"] for g in groups]
         # needs to be graphed for a good visual comparison
-        subgrouped = cdf.groupby(["strategy", "category"]).count()["uid"]
+        subgrouped = cdf.groupby(["preference_number", "strategy"]).count()["uid"]
         if percentify_plot:
             subgrouped *= 100. / len(cdf)
         unstacked = subgrouped.unstack()[groups]
         unstacked.plot.bar(rot=30)
-        plt.legend(labels=[g for g in gb.groups])
         self._plot("Applicants who got their nth preference",
             "%" if percentify_plot else "Count",
             "Satisfied applicants (by category)", percentify=percentify_plot)
@@ -235,12 +235,11 @@ class ApplicantPool(object):
         gb = cdf.groupby(["strategy"])
         to_compare = [gb.get_group(g)["preference_number"] for g in gb.groups]
         # needs to be graphed for a good visual comparison
-        subgrouped = cdf.groupby(["strategy", "category"]).count()["uid"]
+        subgrouped = cdf.groupby(["preference_number", "strategy"]).count()["uid"]
         if percentify_plot:
             subgrouped *= 100. / len(cdf)
         unstacked = subgrouped.unstack()
         unstacked.plot.bar(rot=30)
-        plt.legend(labels=[g for g in gb.groups])
         self._plot("Applicants who got their nth preference",
             "%" if percentify_plot else "Count",
             "Satisfied applicants (by strategy)", percentify=percentify_plot)
@@ -248,7 +247,7 @@ class ApplicantPool(object):
         # TODO: fix this, doesn't work as intended
         return stats.kruskal(*to_compare)
 
-    def compare_two_firsts(self, groups, use_filter=None, cat=None):
+    def compare_two_firsts(self, groups, use_filter=None, cat=None, percentify=False):
         """
         Runs chi-squared test between number of first preferences obtained in two specified strategy subgroups
         stats.chi2_contingency(chi2_table)
@@ -259,11 +258,15 @@ class ApplicantPool(object):
         gb = cdf.groupby(["strategy"])
         to_compare = [(gb.get_group(g)["preference_number"] == 0).value_counts() for g in groups]
         contingency_table = np.array(to_compare)[:, ::-1].T
-        print(contingency_table)
-        # TODO: make contingency table into pd.df for prettier printing
+        contingency_df = pd.DataFrame(contingency_table, columns=groups, index=["Got first preference", "Did not get first preference"])
+        if percentify:
+            contingency_df_percents = contingency_df/contingency_df.sum()
+            display(contingency_df_percents.style.format("{:.2%}"))
+        else:
+            display(contingency_df)
         return stats.chi2_contingency(contingency_table)
 
-    def compare_all_firsts(self, use_filter=None, cat=None):
+    def compare_all_firsts(self, use_filter=None, cat=None, percentify=False):
         """
         Runs chi-squared test between number of first preferences obtained in all strategy subgroups
         stats.chi2_contingency(chi2_table)
@@ -274,5 +277,10 @@ class ApplicantPool(object):
         gb = cdf.groupby(["strategy"])
         to_compare = [(gb.get_group(g)["preference_number"] == 0).value_counts() for g in gb.groups]
         contingency_table = np.array(to_compare)[:, ::-1].T
-        print(contingency_table)
+        contingency_df = pd.DataFrame(contingency_table, columns=[g for g in gb.groups], index=["Got first preference", "Did not get first preference"])
+        if percentify:
+            contingency_df_percents = contingency_df/contingency_df.sum()
+            display(contingency_df_percents.style.format("{:.2%}"))
+        else:
+            display(contingency_df)
         return stats.chi2_contingency(contingency_table)

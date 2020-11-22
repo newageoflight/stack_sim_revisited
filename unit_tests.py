@@ -10,7 +10,7 @@ test_cat_sim = CategoricalSimulation([
 
 # print(test_cat_sim.hospitals.hospital_df)
 # print(stack)
-%time test_cat_sim.run()
+%time test_cat_sim.run(dra_prefill=True)
 
 alloc_arr = test_cat_sim.allocation_matrix
 ones_per_row = np.count_nonzero(alloc_arr, axis=1)

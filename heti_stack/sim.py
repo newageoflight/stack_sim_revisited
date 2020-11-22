@@ -7,7 +7,7 @@ Allocation process simulation objects
 from abc import ABC, abstractmethod
 
 from .sim_utils import cool_numba, one_array, swap_two, accept
-from .applicant import ApplicantPool, hospital_generator
+from .applicant import ApplicantPool
 from .base import category_counts
 from .strategies import Hospitals
 from .utils import POSITIVE_INFINITY
@@ -20,19 +20,27 @@ import pandas as pd
 plt.style.use("ggplot")
 plt.rcParams["font.family"] = "Helvetica Neue"
 
+# TODO: consider making an interactive data visualisation showing the sim doing the allocation
+# basically, animate the bar charts and convergence graphs building up, as well as having a meter for how full the hospitals are
+# 3 panels side by side, more or less
+# cf. Kaggle for an example of how to do this
 class Simulation(ABC):
     """
     Base simulation object, metaclass for the others
     """
     def __init__(self, starting_strategies: "list[tuple[str, float]]", pair_count=3, stack_variants=7, rounds=1) -> None:
-        self._starting_strategies = starting_strategies
-        self.applicant_pool = ApplicantPool(starting_strategies, Hospitals(pair_count, stack_variants))
-        self.hospitals = hospital_generator
+        hospital_object = Hospitals(pair_count, stack_variants)
+        self.starting_strategies = starting_strategies
+        self.applicant_pool = ApplicantPool(starting_strategies, hospital_object)
+        self.hospitals = hospital_object
         self._hospital_capacities = np.array(self.hospitals.hospital_df["capacity"])
         self._hospital_spots = np.array(self.hospitals.hospital_df["spots_remaining"])
         self.allocation_rounds = rounds
         self.preferences_matrix = np.vstack(self.applicant_pool.candidate_df["preferences"])
         self.allocation_matrix = np.zeros_like(self.preferences_matrix)
+
+    def __repr__(self) -> str:
+        return "{0}({1})".format(self.__class__.__name__, self.starting_strategies)
 
     def _dra_prefill(self) -> None:
         """
@@ -42,19 +50,41 @@ class Simulation(ABC):
         cat1_subdf = self.applicant_pool.candidate_df[self.applicant_pool.candidate_df["category"] == 0]
         cat1_indices = cat1_subdf.index
         dra_indices = np.where(self.hospitals.dra_capacities > 0)[0]
-        dra_prefs = self.preferences_matrix[cat1_indices, dra_indices]
+        print(dra_indices, self.hospitals.dra_capacities[dra_indices])
+        dra_prefs = self.preferences_matrix[np.ix_(cat1_indices, dra_indices)]
+        print(dra_prefs, dra_prefs[0])
         dra_firsts = dra_prefs == 0
         dra_firsts = dra_firsts.astype("int32")
-        # allocate them to that hospital
-        self.allocation_matrix[cat1_indices, dra_indices] = dra_firsts
-        # they then need to be excluded from the next round
-        # so the run part will need to be implemented so it checks to see if anyone has already been allocated
+        print(dra_firsts)
+        # allocate them to that hospital, capacity allowing
+        # loop through each dra hospital
+        # sample however many will fit the dra capacity
+        # or if there are fewer preferences than spots available, take everyone who preferenced it
+        # choice(preferenced_candidates, min(number_of_preferences, capacity), replace=False)
+        # update the spots remaining count
+        self._hospital_spots = self._hospital_capacities - self.allocation_matrix.sum(axis=0)
+        if np.any(self._hospital_spots < 0):
+            raise ValueError("DRA has caused the hospitals to be overfilled!\n{0}".format(self._hospital_spots))
+        # detranslate with the flag is_dra positive for applicants
+        self._dra_detranslate()
 
     @abstractmethod
     def run(self, dra_prefill=False) -> None:
         if dra_prefill:
             self._dra_prefill()
     
+    def _dra_detranslate(self) -> None:
+        """
+        Detranslate/announce DRA preallocation results back to the applicant pool
+        """
+        allocation_col = np.argmax(self.allocation_matrix == 1, axis=1)
+        self.applicant_pool.candidate_df["allocation"] = allocation_col
+        self.applicant_pool.candidate_df["is_dra"] = np.any(self.allocation_matrix == 1, axis=1)
+        # no need to calculate preference values as they're all 0 (first)
+        self.hospitals.hospital_df["spots_remaining"] = self._hospital_spots
+        cdf = self.applicant_pool.candidate_df
+        self.hospitals.hospital_df["filled_spots"] = [np.array(cdf[cdf["allocation"] == i]["uid"]) for i in range(len(self._hospital_spots))]
+
     def _detranslate(self) -> None:
         """
         Detranslate/announce the allocation results back to the applicant pool
@@ -125,8 +155,7 @@ class AnnealSimulation(Simulation):
     """
     Runs simulated annealing simulation
     """
-    def __init__(self, starting_strategies: "list[tuple[str, float]]", rounds=1, temp=10000.0, cool_rate=0.001, iterlimit=1000000, backend="cpu") -> None:
-        # TODO: consider making these run parameters rather than sim parameters
+    def __init__(self, starting_strategies: "list[tuple[str, float]]", pair_count=3, stack_variants=7, rounds=1, temp=10000.0, cool_rate=0.001, iterlimit=1000000, backend="cpu") -> None:
         self.min_unhappiness = POSITIVE_INFINITY
         self.best_state = np.array([])
         self._temp = temp
@@ -135,7 +164,7 @@ class AnnealSimulation(Simulation):
         self.unhappiness_df = pd.DataFrame(columns=["current_unhappiness", "min_unhappiness"])
         self.unhappiness_array = np.empty((0,2),dtype=np.int32)
         self._backend = backend
-        super().__init__(starting_strategies, rounds)
+        super().__init__(starting_strategies, pair_count, stack_variants, rounds)
 
     def _setup_initial_state(self) -> None:
         for cat in range(len(category_counts)):
@@ -219,6 +248,7 @@ class AnnealSimulation(Simulation):
             unhappiness_log = cp.asnumpy(unhappiness_log)
         elif backend == "cpu":
             # if we can't use the GPU, use numba.jit
+            # this is actually faster because the dataset is relatively small (1000s rather than 1000000s)
             self._temp, self.min_unhappiness, current_state, self.best_state, unhappiness_log = cool_numba(
                 placed_candidates, relevant_preferences, self._hospital_capacities,
                 self._temp, self._cooling_rate, self._iterlimit

@@ -21,28 +21,30 @@ ordinal_re = r"\d+(?:th|st|rd|nd)"
 # when called (takes an argument), it can check if it was initiated with a list or a function and return accordingly
 
 def push_random_to_top(l):
-	k = l[:]
-	k.insert(0, k.pop(random.randint(0,len(k)-1)))
-	return k
+    k = l[:]
+    k.insert(0, k.pop(random.randint(0,len(k)-1)))
+    return k
 
 def push_weighted_random_to_top(l, w):
     k = l[:]
-    k.insert(0, k.pop(choice(len(k), 1, p=w)))
+    # stupid, ugly fix but i don't really know what else to do
+    origin = choice(len(k), 1, p=w)[0]
+    k.insert(0, k.pop(origin))
     return k
 
 def push_random_to_positions(l, *positions):
-	k = l
-	pairs = zip(positions, choice(len(k), len(positions)))
-	for target, origin in pairs:
-		k.insert(target, k.pop(origin))
-	return k
+    k = l
+    pairs = zip(positions, choice(len(k), len(positions)))
+    for target, origin in pairs:
+        k.insert(target, k.pop(origin))
+    return k
 
 def push_wt_random_to_positions(l, w, *positions):
-	k = l
-	pairs = zip(positions, choice(len(k), len(positions), p=w))
-	for target, origin in pairs:
-		k.insert(target, k.pop(origin))
-	return k
+    k = l
+    pairs = zip(positions, choice(len(k), len(positions), p=w))
+    for target, origin in pairs:
+        k.insert(target, k.pop(origin))
+    return k
 
 class Hospitals(object):
     """
@@ -74,7 +76,7 @@ class Hospitals(object):
         pairs = []
         for i in range(pair_count):
             pair_first = random.choice(tuple(indices_remaining))
-            pair_second = pair_first + 1 if pair_first != len(self.default_stack) else pair_first - 1
+            pair_second = pair_first + 1 if pair_first != len(self.default_stack) - 1 else pair_first - 1
             pair = set([pair_first, pair_second])
             indices_remaining -= pair
             pairs.append(pair)
@@ -87,6 +89,8 @@ class Hospitals(object):
             self._rearrangement_pairset_used.append(False)
     
     def _get_rearranged_stack(self):
+        if not self._stack_rearrangement_pairsets:
+            self._generate_stack_rearrangements()
         pairs = random.choice(self._stack_rearrangement_pairsets)
         new_stack = self.default_stack.copy()
         for pair in pairs:
@@ -112,7 +116,8 @@ class Hospitals(object):
         elif s == "weighted random":
             stack_to_use = list(np.random.choice(hospital_sequence, len(hospital_sequence), p=self.hospital_weights, replace=False))
         elif s == "random with weighted random top":
-            stack_to_use = push_weighted_random_to_top(hospital_sequence, self.hospital_weights)
+            rearr = random.sample(hospital_sequence[:], len(hospital_sequence))
+            stack_to_use = push_weighted_random_to_top(rearr, [self.hospital_weights[i] for i in rearr])
         elif s == "stack with random top":
             stack_to_use = push_random_to_top(self.default_stack)
         elif s == "stack with weighted random top":
@@ -126,14 +131,14 @@ class Hospitals(object):
         # i'll use regex to get the number out of the string
         elif re.match("stack with random (?:({0})(, )?)* and ({0})".format(ordinal_re), s):
             ordinals_found = [int(o[:-2])-1 for o in re.findall(ordinal_re, s)]
-            stack_to_use = push_random_to_positions(self.default_stack, [self.hospital_weights[i] for i in self.default_stack], *ordinals_found)
+            stack_to_use = push_random_to_positions(self.default_stack, *ordinals_found)
         elif re.match("stack with weighted random (?:({0})(, )?)* and ({0})".format(ordinal_re), s):
             ordinals_found = [int(o[:-2])-1 for o in re.findall(ordinal_re, s)]
             stack_to_use = push_wt_random_to_positions(self.default_stack, [self.hospital_weights[i] for i in self.default_stack], *ordinals_found)
         elif re.match("variant stack with random (?:({0})(, )?)* and ({0})".format(ordinal_re), s):
             stack_rearr = self._get_rearranged_stack()
             ordinals_found = [int(o[:-2])-1 for o in re.findall(ordinal_re, s)]
-            stack_to_use = push_random_to_positions(stack_rearr, [self.hospital_weights[i] for i in stack_rearr], *ordinals_found)
+            stack_to_use = push_random_to_positions(stack_rearr, *ordinals_found)
         elif re.match("variant stack with weighted random (?:({0})(, )?)* and ({0})".format(ordinal_re), s):
             stack_rearr = self._get_rearranged_stack()
             ordinals_found = [int(o[:-2])-1 for o in re.findall(ordinal_re, s)]
