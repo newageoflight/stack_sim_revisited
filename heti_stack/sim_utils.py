@@ -1,6 +1,5 @@
 from .utils import POSITIVE_INFINITY
 
-import math
 import numba
 import numpy as np
 import cupy as cp
