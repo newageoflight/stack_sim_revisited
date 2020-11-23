@@ -1,6 +1,10 @@
 # Information
 
-The code has been heavily modified since the last iteration to better fit the format of an ipynb. You can either view it [right here on Github](./heti_stack_simulator.ipynb) or as an interactive [CoLab notebook](https://colab.research.google.com/drive/1wY4uANJyx7ZYhWDpqx2GrC-N8UJtNAeK?usp=sharing) which you can add to your Google Drive.
+The code has been heavily modified since the last iteration to better fit the format of an ipynb.
+
+It now comes in two parts:
+- [HETI's algorithm and the problem of stacking](https://colab.research.google.com/github/newageoflight/stack_sim_revisited/blob/master/heti_stack_simulator.ipynb)
+- [Exploring the Queensland Ballot algorithm as an alternative to stacking](https://colab.research.google.com/github/newageoflight/stack_sim_revisited/blob/master/heti_alternatives.ipynb)
 
 If you came here looking for the original article, please go to the link(s) above where a much nicer interactive version of this article is hosted.
 
