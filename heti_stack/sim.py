@@ -114,6 +114,9 @@ class Simulation(ABC):
         cdf = self.applicant_pool.candidate_df
         self.hospitals.hospital_df["filled_spots"] = [np.array(cdf[cdf["allocation"] == i]["uid"]) for i in range(len(self._hospital_spots))]
 
+    def unhappiness(self):
+        return np.sum(self.allocation_matrix * self.preferences_matrix)
+
 
 class CategoricalSimulation(Simulation):
     """
@@ -296,7 +299,6 @@ class QBSimulation(Simulation):
         non_dra_indices = np.where(np.all(self.allocation_matrix == 0, axis=1))[0]
         # iterate through categories
         for cat in range(len(category_counts)):
-            print(cat)
             total_remaining_spots = np.sum(self._hospital_spots)
             cat_subdf = self.applicant_pool.candidate_df[self.applicant_pool.candidate_df.category == cat]
             cat_indices = cat_subdf.index
@@ -317,7 +319,7 @@ class QBSimulation(Simulation):
             oversubscribed = np.where(self._hospital_spots < 0)[0]
             # undersubscribed does not include full
             undersubscribed = np.where(self._hospital_spots > 0)[0]
-            while oversubscribed.any():
+            while len(oversubscribed) > 0:
                 # choose a random target candidate from an oversubscribed hospital
                 oversubscribed_hospital_places = self.allocation_matrix[np.ix_(target_indices, oversubscribed)]
                 chosen_target = target_indices[np.random.choice(np.where(np.any(oversubscribed_hospital_places == 1, axis=1))[0], 1)[0]]
@@ -326,10 +328,11 @@ class QBSimulation(Simulation):
                 # print(chosen_target, realloc_destination)
                 # print("Undersubscribed preferences:", self.preferences_matrix[chosen_target, undersubscribed])
                 # reallocate them to that hospital
-                self.allocation_matrix[chosen_target] = one_array(len(self._hospital_spots), realloc_destination)
+                self.allocation_matrix[chosen_target] = one_array(len(self._hospital_spots), undersubscribed[realloc_destination])
                 # print("New allocation:", self.allocation_matrix[chosen_target])
                 self._update_spots()
                 # print("Spots:", self._hospital_spots)
                 oversubscribed = np.where(self._hospital_spots < 0)[0]
                 undersubscribed = np.where(self._hospital_spots > 0)[0]
+            # print("Cat {0} finished".format(cat+1))
         self._detranslate()

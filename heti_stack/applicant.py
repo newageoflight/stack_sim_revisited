@@ -114,11 +114,13 @@ class ApplicantPool(object):
         if wanted_re.match(q):
             matched = wanted_re.match(q)
             top_cap = int(matched.group(1))
-            return df[df.first_preference.isin(stack[:top_cap])]
+            acceptable_tops = np.where(np.array(stack) < top_cap)[0]
+            return df[df.first_preference.isin(acceptable_tops)]
         elif got_re.match(q):
             matched = got_re.match(q)
             top_cap = int(matched.group(1))
-            return df[df.allocation.isin(stack[:top_cap])]
+            acceptable_tops = np.where(np.array(stack) < top_cap)[0]
+            return df[df.allocation.isin(acceptable_tops)]
         else:
             raise NotImplementedError("This filter hasn't been implemented yet!")
 

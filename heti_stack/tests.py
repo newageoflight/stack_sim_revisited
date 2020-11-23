@@ -1,8 +1,11 @@
+from functools import reduce
 from IPython.display import display, HTML
 
 from .sim import AnnealSimulation, CategoricalSimulation, QBSimulation
 
-def make_sim(starting_strategies: "list[tuple[str, float]]", mode="anneal", percentify=True, **kwargs):
+import pandas as pd
+
+def make_sim(starting_strategies: "list[tuple[str, float]]", mode="anneal", **kwargs):
     """
     Create and run simulation without generating stats and plots
     """
@@ -24,7 +27,7 @@ def create_and_run_sim(starting_strategies: "list[tuple[str, float]]", mode="ann
 
     Basically a convenience macro for running a test from within a Jupyter notebook.
     """
-    sim = make_sim(starting_strategies, mode, percentify, **kwargs)
+    sim = make_sim(starting_strategies, mode, **kwargs)
     generate_sim_stats(sim, mode, percentify)
     return sim
 
@@ -32,6 +35,8 @@ def create_and_run_qb_sim(starting_strategies: "list[tuple[str, float]]", percen
     return create_and_run_sim(starting_strategies, mode="qb", percentify=percentify, **kwargs)
 
 def generate_sim_stats(sim, mode="anneal", percentify=True):
+    display(HTML("<p>Final global unhappiness: {0}</p>".format(sim.unhappiness())))
+
     if mode == "anneal":
         sim.plot_convergence()
 
@@ -65,11 +70,15 @@ def generate_sim_stats(sim, mode="anneal", percentify=True):
 
 def make_single_strategy_simulation(strategy: str, mode="anneal", percentify=True, **kwargs):
     starting_strategies = [(strategy, 1.0)]
-    make_sim(starting_strategies, mode=mode, percentify=percentify, **kwargs)
+    return make_sim(starting_strategies, mode=mode, percentify=percentify, **kwargs)
 
 def create_and_run_single_strategy_simulation(strategy: str, mode="anneal", percentify=True, **kwargs):
     starting_strategies = [(strategy, 1.0)]
-    create_and_run_sim(starting_strategies, mode=mode, percentify=percentify, **kwargs)
+    return create_and_run_sim(starting_strategies, mode=mode, percentify=percentify, **kwargs)
+
+def create_and_run_single_strategy_qb_simulation(strategy: str, percentify=True, **kwargs):
+    starting_strategies = [(strategy, 1.0)]
+    return create_and_run_sim(starting_strategies, mode='qb', percentify=percentify, **kwargs)
 
 def compare_two_groups_util(sim, groups, use_filter=None, percentify=True, exclude_dra=False):
     """
@@ -104,3 +113,27 @@ def compare_two_groups_all_conditions(sim, groups, percentify=True):
             display(HTML("<h6>Filter: {0}</h6>".format(f)))
             compare_two_groups_util(sim, groups, f, percentify=percentify, exclude_dra=dra)
             
+def compare_unhappiness_between_sim_algs(starting_strategies, *modes, show_stats=False, **kwargs):
+    sim_func = create_and_run_sim if show_stats else make_sim
+    sim_dict = {}
+    for mode in modes:
+        display(HTML("<h5>Algorithm: {}</h5>".format(mode)))
+        sim_dict[mode] = sim_func(starting_strategies, mode=mode, **kwargs)
+    # sim_dict = {mode: sim_func(starting_strategies, mode=mode, **kwargs) for mode in modes}
+    pre_df = [{"starting_strategies": str(v.starting_strategies),
+        "final_unhappiness": v.unhappiness(),
+        "algorithm": k,
+        "sim": v}
+        for k, v in sim_dict.items()]
+    return pd.DataFrame(pre_df)
+
+def compare_unhappiness_for_multiple_sims(starting_strategy_list, *modes, **kwargs):
+    sim_list = [{mode: make_sim(strat, mode=mode, **kwargs) for mode in modes}
+        for strat in starting_strategy_list]
+    pre_df = [[{"starting_strategies": str(v.starting_strategies),
+        "final_unhappiness": v.unhappiness(),
+        "algorithm": k,
+        "sim": v}
+        for k, v in d.items()] for d in sim_list]
+    pre_df = reduce(lambda a, b: a+b, pre_df)
+    return pd.DataFrame(pre_df)

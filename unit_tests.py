@@ -49,3 +49,38 @@ test_anneal_gpu_sim.plot_convergence()
 test_anneal_cpu_sim.plot_convergence()
 print("If the graphs look correct, then the anneal sim works properly")
 #%%
+
+# %%
+from heti_stack.sim import QBSimulation
+
+sim = QBSimulation([
+    ("stack", 1.0)
+])
+
+%time sim.run()
+
+cpool = sim.applicant_pool
+cdf = cpool.candidate_df
+# %%
+
+#%%
+import pandas as pd
+
+df = pd.DataFrame([("stack", 0.5), ("random", 0.5)], columns=["strategy", "percentage"])
+df.style.format({"percentage": "{:.2%}"})
+#%%
+#%%
+from heti_stack.tests import compare_unhappiness_for_multiple_sims
+
+df = compare_unhappiness_for_multiple_sims([
+    [("stack", 1.0)],
+    [("random", 1.0)]
+], "categorical", "anneal", "qb")
+df.groupby(["starting_strategies", "algorithm"])
+#%%
+#%%
+from heti_stack.tests import create_and_run_single_strategy_qb_simulation
+
+
+create_and_run_single_strategy_qb_simulation("stack")
+#%%
