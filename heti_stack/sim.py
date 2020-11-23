@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# TODO: remove cp functions, they're not really that fast anyway
 
 """
 Allocation process simulation objects

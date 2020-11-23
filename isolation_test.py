@@ -1,14 +1,12 @@
 # %%
-from heti_stack.sim import QBSimulation
+from heti_stack.tests import compare_two_groups_all_conditions, create_and_run_qb_sim
 
-sim = QBSimulation([
+
+sim = create_and_run_qb_sim([
     ("random with weighted random top", 0.1),
     ("variant stack", 0.3),
     ("stack", 0.6)
 ])
 
-%time sim.run()
-
-cpool = sim.applicant_pool
-cdf = cpool.candidate_df
+compare_two_groups_all_conditions(sim, ["random with weighted random top", ["variant stack", "stack"]])
 # %%

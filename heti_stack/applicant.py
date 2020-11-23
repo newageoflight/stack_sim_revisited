@@ -319,6 +319,7 @@ class ApplicantPool(object):
         """
         # first convert all groups to lists for safety
         groups_list = [[i] if type(i) != list else i for i in groups]
+        # why does this line throw a warning?
         df["group"] = ""
         for g in groups_list:
             group_name = "+".join(g)

@@ -1,4 +1,5 @@
 from .utils import POSITIVE_INFINITY
+from numba import prange
 
 # TODO: remove cp functions so it can be used on CoLab
 import numba
@@ -61,7 +62,11 @@ def np_sum_mul(a, b):
 
 @numba.njit(parallel=True)
 def np_colsum(a):
-    return np.sum(a, axis=0)
+    rows, cols = a.shape
+    colsum = np.zeros(cols)
+    for i in prange(cols):
+        colsum[i] = np.sum(a[:, i])
+    return colsum
 
 @numba.njit(fastmath=True)
 def cool_numba(current_state_arr, pref_arr, capacity_arr, T, cool_rate, iterlimit):

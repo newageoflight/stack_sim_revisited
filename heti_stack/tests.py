@@ -120,7 +120,7 @@ def compare_unhappiness_between_sim_algs(starting_strategies, *modes, show_stats
         display(HTML("<h5>Algorithm: {}</h5>".format(mode)))
         sim_dict[mode] = sim_func(starting_strategies, mode=mode, **kwargs)
     # sim_dict = {mode: sim_func(starting_strategies, mode=mode, **kwargs) for mode in modes}
-    pre_df = [{"starting_strategies": str(v.starting_strategies),
+    pre_df = [{"starting_strategies": make_strat_string(v.starting_strategies),
         "final_unhappiness": v.unhappiness(),
         "algorithm": k,
         "sim": v}
@@ -130,10 +130,13 @@ def compare_unhappiness_between_sim_algs(starting_strategies, *modes, show_stats
 def compare_unhappiness_for_multiple_sims(starting_strategy_list, *modes, **kwargs):
     sim_list = [{mode: make_sim(strat, mode=mode, **kwargs) for mode in modes}
         for strat in starting_strategy_list]
-    pre_df = [[{"starting_strategies": str(v.starting_strategies),
+    pre_df = [[{"starting_strategies": make_strat_string(v.starting_strategies),
         "final_unhappiness": v.unhappiness(),
         "algorithm": k,
         "sim": v}
         for k, v in d.items()] for d in sim_list]
     pre_df = reduce(lambda a, b: a+b, pre_df)
     return pd.DataFrame(pre_df)
+
+def make_strat_string(starting_strategies: "list[tuple[str, float]]"):
+    return ", ".join(["{1:.2%} {0}".format(*t) for t in starting_strategies])
