@@ -1,29 +1,30 @@
 from .utils import POSITIVE_INFINITY
 
+# TODO: remove cp functions so it can be used on CoLab
 import numba
 import numpy as np
-import cupy as cp
+# import cupy as cp
 
-def swap_two(lst):
-    """
-    Swap two elements in a cupy array
-    """
-    new_list = lst.copy()
-    app_len = len(new_list) - 1
-    a, b = cp.random.choice(app_len, 2, replace=False)
-    # won't work properly if you don't do this
-    orig, swap = cp.array([a,b]), cp.array([b,a])
-    new_list[orig] = new_list[swap]
-    return new_list
+# def swap_two(lst):
+#     """
+#     Swap two elements in a cupy array
+#     """
+#     new_list = lst.copy()
+#     app_len = len(new_list) - 1
+#     a, b = cp.random.choice(app_len, 2, replace=False)
+#     # won't work properly if you don't do this
+#     orig, swap = cp.array([a,b]), cp.array([b,a])
+#     new_list[orig] = new_list[swap]
+#     return new_list
 
-def accept(energy, new_energy, T):
-    """
-    Accept a cupy array swap
-    """
-    if new_energy < energy:
-        return 1
-    else:
-        return cp.exp((energy - new_energy)/T)
+# def accept(energy, new_energy, T):
+#     """
+#     Accept a cupy array swap
+#     """
+#     if new_energy < energy:
+#         return 1
+#     else:
+#         return cp.exp((energy - new_energy)/T)
 
 def one_array(l, n, v=1):
     """

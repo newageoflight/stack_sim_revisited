@@ -160,9 +160,10 @@ class ApplicantPool(object):
         allgrouped = cdf.groupby(["preference_number"]).count()["uid"]
         if percentify:
             allgrouped *= 100. / len(cdf)
-        allgrouped.plot.bar(rot=30)
+        allgrouped = self._make_plottable(allgrouped.to_frame())
+        allgrouped.plot.bar(rot=30, legend=None)
         self._plot("Applicants who got their nth preference",
-            "%" if percentify else "Count",
+            "% of all placed applicants" if percentify else "Count",
             "Satisfied applicants (all)", percentify=percentify)
 
     def plot_all_separated(self, use_filter=None, percentify=False, exclude_dra=False):
@@ -171,10 +172,11 @@ class ApplicantPool(object):
         if percentify:
             subgrouped *= 100. / len(cdf)
         unstacked = subgrouped.unstack()
+        unstacked = self._make_plottable(unstacked)
         unstacked.plot.bar(rot=30)
         plt.legend(labels=unstacked.columns + 1)
         self._plot("Applicants who got their nth preference",
-            "%" if percentify else "Count",
+            "% of all placed applicants" if percentify else "Count",
             "Satisfied applicants (by category)", percentify=percentify)
     
     def plot_single_category(self, cat, use_filter=None, percentify=False, exclude_dra=False):
@@ -182,9 +184,10 @@ class ApplicantPool(object):
         catgroup = cat_df.groupby(["preference_number"]).count()["uid"]
         if percentify:
             catgroup *= 100. / len(cat_df)
-        catgroup.plot.bar(rot=30)
+        catgroup = self._make_plottable(catgroup.to_frame())
+        catgroup.plot.bar(rot=30, legend=None)
         self._plot("Applicants who got their nth preference",
-            "%" if percentify else "Count",
+            "% of placed applicants in category" if percentify else "Count",
             "Satisfied category {cat} applicants".format(cat=cat+1), percentify=percentify)
     
     def plot_every_category(self, use_filter=None, percentify=False, exclude_dra=False):
@@ -195,7 +198,6 @@ class ApplicantPool(object):
     def _plot(xlab, ylab, title, filename="", percentify=False):
         if not filename:
             filename = title
-        plt.xticks(np.arange(15), [ordinal(n+1) for n in range(15)])
         if percentify:
             plt.yticks(np.arange(0, 101, 10))
         plt.xlabel(xlab)
@@ -206,6 +208,14 @@ class ApplicantPool(object):
         # plt.clf()
         # plt.cla()
         # plt.close('all')
+
+    @staticmethod
+    def _make_plottable(df):
+        append_rows = pd.DataFrame(np.nan, index=np.setdiff1d(np.arange(15), np.array(df.index)), columns=df.columns)
+        df = df.append(append_rows)
+        df = df.sort_index()
+        df = df.set_index(pd.Index([ordinal(n+1) for n in df.index]))
+        return df
 
     def compare_two_subgroups(self, groups, use_filter=None, cat=None, percentify_plot=False, exclude_dra=False):
         """
@@ -223,14 +233,17 @@ class ApplicantPool(object):
         to_compare = [new_gb.get_group(g)["preference_number"] for g in new_gb.groups]
         # needs to be graphed for a good visual comparison
         subgrouped = new_df.groupby(["preference_number", "group"]).count()["uid"]
-        if percentify_plot:
-            subgrouped *= 100. / len(cdf)
         unstacked = subgrouped.unstack()
+        avg_unhappiness = unstacked.mul(unstacked.index, axis=0, fill_value=0).sum()/unstacked.sum()
+        display(avg_unhappiness.to_frame(name="Average unhappiness"))
+        # fill the unstacked df with any missing values
+        unstacked = self._make_plottable(unstacked)
+        if percentify_plot:
+            unstacked *= 100. / unstacked.sum()
         unstacked.plot.bar(rot=30)
         self._plot("Applicants who got their nth preference",
-            "%" if percentify_plot else "Count",
-            "Satisfied applicants (by category)", percentify=percentify_plot)
-        # make it so that each strategy gets their own bar
+            "% of strategy subgroup" if percentify_plot else "Count",
+            "Satisfied applicants (by group)", percentify=percentify_plot)
         return stats.mannwhitneyu(*to_compare)
     
     def compare_all_subgroups(self, use_filter=None, cat=None, percentify_plot=False, exclude_dra=False):
@@ -243,13 +256,20 @@ class ApplicantPool(object):
         to_compare = [gb.get_group(g)["preference_number"] for g in gb.groups]
         # needs to be graphed for a good visual comparison
         subgrouped = cdf.groupby(["preference_number", "strategy"]).count()["uid"]
-        if percentify_plot:
-            subgrouped *= 100. / len(cdf)
         unstacked = subgrouped.unstack()
+        avg_unhappiness = unstacked.mul(unstacked.index, axis=0, fill_value=0).sum()/unstacked.sum()
+        display(avg_unhappiness.to_frame(name="Average unhappiness"))
+        # fill the unstacked df with any missing values
+        append_rows = pd.DataFrame(np.nan, index=np.setdiff1d(np.arange(15), np.array(unstacked.index)), columns=unstacked.columns)
+        unstacked = unstacked.append(append_rows)
+        unstacked = unstacked.sort_index()
+        unstacked = unstacked.set_index(pd.Index([ordinal(n+1) for n in unstacked.index]))
+        if percentify_plot:
+            unstacked *= 100. / unstacked.sum()
         unstacked.plot.bar(rot=30)
         self._plot("Applicants who got their nth preference",
-            "%" if percentify_plot else "Count",
-            "Satisfied applicants (by strategy)", percentify=percentify_plot)
+            "% of strategy subgroup" if percentify_plot else "Count",
+            "Satisfied applicants (by group)", percentify=percentify_plot)
         return stats.kruskal(*to_compare)
 
     def compare_two_firsts(self, groups, use_filter=None, cat=None, percentify=False, exclude_dra=False):
@@ -257,15 +277,13 @@ class ApplicantPool(object):
         Runs chi-squared test between number of first preferences obtained in two specified strategy subgroups
         stats.chi2_contingency(chi2_table)
         """
-        # TODO: implement compound groups i.e. merge two groups together and treat them as one to compare
         cdf = self.placed(category=cat, use_filter=use_filter, exclude_dra=exclude_dra)
         gb = cdf.groupby(["strategy"])
         new_df = self.make_groups(cdf, gb, groups)
         new_gb = new_df.groupby(["group"])
         to_compare = [(new_gb.get_group(g)["preference_number"] == 0).value_counts() for g in new_gb.groups]
-        # needs to be graphed for a good visual comparison
-        # to_compare = [(gb.get_group(g)["preference_number"] == 0).value_counts() for g in groups]
-        contingency_table = np.array(to_compare)[:, ::-1].T
+        # not clean but it works
+        contingency_table = np.array(list(map(lambda s: [s.get(True, 0), s.get(False, 0)], to_compare))).T
         contingency_df = pd.DataFrame(contingency_table, columns=[g for g in new_gb.groups], index=["Got first preference", "Did not get first preference"])
         if percentify:
             contingency_df_percents = contingency_df/contingency_df.sum()
@@ -282,7 +300,8 @@ class ApplicantPool(object):
         cdf = self.placed(category=cat, use_filter=use_filter, exclude_dra=exclude_dra)
         gb = cdf.groupby(["strategy"])
         to_compare = [(gb.get_group(g)["preference_number"] == 0).value_counts() for g in gb.groups]
-        contingency_table = np.array(to_compare)[:, ::-1].T
+        # not clean but it works
+        contingency_table = np.array(list(map(lambda s: [s.get(True, 0), s.get(False, 0)], to_compare))).T
         contingency_df = pd.DataFrame(contingency_table, columns=[g for g in gb.groups], index=["Got first preference", "Did not get first preference"])
         if percentify:
             contingency_df_percents = contingency_df/contingency_df.sum()

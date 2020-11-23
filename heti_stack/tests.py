@@ -1,6 +1,6 @@
 from IPython.display import display, HTML
 
-from .sim import AnnealSimulation, CategoricalSimulation
+from .sim import AnnealSimulation, CategoricalSimulation, QBSimulation
 
 def make_sim(starting_strategies: "list[tuple[str, float]]", mode="anneal", percentify=True, **kwargs):
     """
@@ -11,6 +11,8 @@ def make_sim(starting_strategies: "list[tuple[str, float]]", mode="anneal", perc
         sim = AnnealSimulation(starting_strategies, **kwargs)
     elif mode == "categorical":
         sim = CategoricalSimulation(starting_strategies, **kwargs)
+    elif mode == "qb":
+        sim = QBSimulation(starting_strategies, **kwargs)
     
     sim.run()
     return sim
@@ -25,6 +27,9 @@ def create_and_run_sim(starting_strategies: "list[tuple[str, float]]", mode="ann
     sim = make_sim(starting_strategies, mode, percentify, **kwargs)
     generate_sim_stats(sim, mode, percentify)
     return sim
+
+def create_and_run_qb_sim(starting_strategies: "list[tuple[str, float]]", percentify=True, **kwargs):
+    return create_and_run_sim(starting_strategies, mode="qb", percentify=percentify, **kwargs)
 
 def generate_sim_stats(sim, mode="anneal", percentify=True):
     if mode == "anneal":
@@ -72,14 +77,14 @@ def compare_two_groups_util(sim, groups, use_filter=None, percentify=True, exclu
     """
     if len(sim.starting_strategies) > 1:
         cpool = sim.applicant_pool
-        display(HTML("<p>Kruskal test comparing overall happiness between strategy subgroups</p>"))
+        display(HTML("<p>Mann-Whitney U test comparing overall happiness between two strategy subgroups</p>"))
         mwu_stat, mwu_p = cpool.compare_two_subgroups(groups, use_filter=use_filter, percentify_plot=percentify, exclude_dra=exclude_dra)
         display(HTML("""
         <ul>
-            <li>Kruskal test statistic: {stat}</li>
+            <li>Mann-Whitney U test statistic: {stat}</li>
             <li><em>p</em> value: {pval}</li>
         </ul>""".format(stat=mwu_stat, pval=mwu_p if mwu_p > 0.05 else "<strong>{0}</strong>".format(mwu_p))))
-        display(HTML("<p>Chi-squared test comparing first preferences obtained in strategy subgroups</p>"))
+        display(HTML("<p>Chi-squared test comparing first preferences obtained in two strategy subgroups</p>"))
         chi2_stat, chi2_p, chi2_dof, _ = cpool.compare_two_firsts(groups, use_filter=use_filter, percentify=percentify, exclude_dra=exclude_dra)
         display(HTML("""
         <ul>
@@ -90,6 +95,7 @@ def compare_two_groups_util(sim, groups, use_filter=None, percentify=True, exclu
         raise Exception("This simulation doesn't have subgroups to compare")
 
 def compare_two_groups_all_conditions(sim, groups, percentify=True):
+    display(HTML("<h5>Compare groups: {0} vs {1}</h5>".format(*["+".join(e) if type(e) == list else e for e in groups])))
     dra_switches = [False, True]
     cfilters = [None, "wanted top 4 hospital", "got top 4 hospital", "wanted top 6 hospital", "got top 6 hospital"]
     for dra in dra_switches:
