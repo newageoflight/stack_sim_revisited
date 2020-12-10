@@ -14,7 +14,7 @@ from .utils import POSITIVE_INFINITY
 
 import matplotlib.pyplot as plt
 import numpy as np
-import cupy as cp
+# import cupy as cp
 import pandas as pd
 
 plt.style.use("ggplot")
