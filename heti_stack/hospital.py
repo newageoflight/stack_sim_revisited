@@ -1,3 +1,4 @@
+# TODO: implement CSV reading for hospital objects
 import random
 
 # Base hospital class
